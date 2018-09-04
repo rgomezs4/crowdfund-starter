@@ -1,6 +1,8 @@
 import React from 'react'
 import { Modal, Header, Form, Input, Button, Message } from 'semantic-ui-react'
 
+import { ABI_DASHBOARD, ABI_CAMPAIGN, ADDRESS } from '../constants/constants'
+
 class DonateModal extends React.Component {
   constructor(props){
     super(props)
@@ -12,7 +14,7 @@ class DonateModal extends React.Component {
   handleAmountChange(e) {
     this.setState({amount: e.target.value})
   }
-  handleSubmit() {
+  async handleSubmit() {
     console.log('Submit')
     this.setState({processing: true, success: false, error: false})
     if(this.state.amount === '' || isNaN(this.state.amount)) {
@@ -22,11 +24,24 @@ class DonateModal extends React.Component {
       this.setState({error: true, processing: false, errorMessage: 'Must be > 0.'})
     }
     else{
-      /*
-       * TODO: Submit a call to Dashboard.makeContribution including the amount of wei specified
-       */
-
+      await this.donate(this.props.id, this.state.amount);
+      this.setState({processing: false});
     }
+  }
+  donate = async (id, amount) => {
+    const Dashboard = window.web3.eth.contract(ABI_DASHBOARD);
+    let dashboardInstance = Dashboard.at(ADDRESS);
+    return new Promise((resolve, reject) => {
+      dashboardInstance.makeContribution(id, {
+        value: amount
+      }, (err, data) => {
+        if (err) {
+          reject(err)
+        } else {
+          resolve(data.toString())
+        }
+      });
+    });
   }
   render() {
     return (

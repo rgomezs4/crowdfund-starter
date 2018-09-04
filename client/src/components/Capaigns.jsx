@@ -2,6 +2,8 @@ import React from 'react'
 import { Card, Icon, Image, Progress } from 'semantic-ui-react'
 import DonateModal from './DonateModal'
 
+import { ABI_DASHBOARD, ABI_CAMPAIGN, ADDRESS } from '../constants/constants'
+
 const UNIX_TIME = 1535829759
 
 const style = {
@@ -19,13 +21,9 @@ class Campaigns extends React.Component{
     super(props)
     this.state = {campaigns: []}
   }
-  componentWillMount() {
-    /*
-     * TODO: Fetch all campaigns and add them to the components state with `this.setState({<params>})`
-     * This function is called before the page loads
-     */
-    this.setState({campaigns: exampleCampaigns()})
-    //
+  async componentWillMount() {
+    let campaings = await getCampaigns();
+    this.setState({campaigns: campaings})
   }
   render () {
     if(this.state.campaigns.length === 0) {
@@ -46,53 +44,95 @@ class Campaigns extends React.Component{
 
 }
 
-// NOTE: This functions is marked as async, consider using await (promises) inside of it
-const getCampaign = async (address) => {
-  /*
-   * TODO: Fetch campaign info. See Campaign component below. Keep in mind it expects specific property names (props).
-   * Use the examples below as a template.
-   */
+const getCampaignsCount = async () => {
+  const Dashboard = window.web3.eth.contract(ABI_DASHBOARD);
+  let dashboardInstance = Dashboard.at(ADDRESS);
+  return new Promise((resolve, reject) => {
+    dashboardInstance.campaignCount((err, data) => {
+      if (err) {
+        reject(err)
+      } else {
+        resolve(data.toString())
+      }
+    });
+  });
+}
+const getCampaigns = async () => {
+  let count = await getCampaignsCount();
+  let addressArray = [];
+  for(let i = 1; i <= count; i ++){
+    let address = await getCampaign(i);
+    let info = await getCampaignInfo(address);
+    var campaignInfo = info.split(",");
+    addressArray.push({
+      id: i,
+      name: campaignInfo[2],
+      target: campaignInfo[0],
+      raised: campaignInfo[3],
+      ipfsImage: 'https://react.semantic-ui.com/images/avatar/large/matthew.png',
+      funderCount: campaignInfo[4],
+      expires: UNIX_TIME + 3600 * 4,
+      address: address
+    });
+  }
+  return addressArray;
 }
 
-const exampleCampaigns = () => {
-  return [
-    {
-      name: 'Test',
-      target: 1000,
-      raised: 100,
-      ipfsImage: 'https://react.semantic-ui.com/images/avatar/large/matthew.png',
-      funderCount: 10,
-      expires: UNIX_TIME + 3600 * 4,
-      address: '0xced42495b72d48a3a78b92346d4f1b7d2e1f7c61a22fe01641daed83cd749493'
-    },
-    {
-      name: 'Test',
-      target: 1000,
-      raised: 100,
-      ipfsImage: 'https://react.semantic-ui.com/images/avatar/large/matthew.png',
-      funderCount: 10,
-      expires: UNIX_TIME + 3600 * 4,
-      address: '0xced42495b72d48a3a78b92346d4f1b7d2e1f7c61a22fe01641daed83cd749493'
-    },
-    {
-      name: 'Test',
-      target: 1000,
-      raised: 100,
-      ipfsImage: 'https://react.semantic-ui.com/images/avatar/large/matthew.png',
-      funderCount: 10,
-      expires: UNIX_TIME + 3600 * 4,
-      address: '0xced42495b72d48a3a78b92346d4f1b7d2e1f7c61a22fe01641daed83cd749493'
-    },
-    {
-      name: 'Test',
-      target: 1000,
-      raised: 100,
-      ipfsImage: 'https://react.semantic-ui.com/images/avatar/large/matthew.png',
-      funderCount: 10,
-      expires: UNIX_TIME + 3600 * 4,
-      address: '0xced42495b72d48a3a78b92346d4f1b7d2e1f7c61a22fe01641daed83cd749493'
-    }
-  ]
+const getCampaignInfo = async (address) => {
+  const Campaign = window.web3.eth.contract(ABI_CAMPAIGN);
+  let campaignInstance = Campaign.at(address);
+  return new Promise((resolve, reject) => {
+    campaignInstance.getCampaignInfo((err, data) => {
+      if (err) {
+        reject(err)
+      } else {
+        resolve(data.toString())
+      }
+    });
+  });
+}
+
+const getCampaignName = async (address) => {
+  const Campaign = window.web3.eth.contract(ABI_CAMPAIGN);
+  let campaignInstance = Campaign.at(address);
+  return new Promise((resolve, reject) => {
+    campaignInstance.name((err, data) => {
+      if (err) {
+        reject(err)
+      } else {
+        resolve(data.toString())
+      }
+    });
+  });
+}
+
+const getCampaignGoal = async (address) => {
+  const Campaign = window.web3.eth.contract(ABI_CAMPAIGN);
+  let campaignInstance = Campaign.at(address);
+  return new Promise((resolve, reject) => {
+    campaignInstance.goal((err, data) => {
+      if (err) {
+        reject(err)
+      } else {
+        resolve(data.toString())
+      }
+    });
+  });
+}
+
+// NOTE: This functions is marked as async, consider using await (promises) inside of it
+const getCampaign = async (address) => {
+  const Dashboard = window.web3.eth.contract(ABI_DASHBOARD);
+  let dashboardInstance = Dashboard.at(ADDRESS);
+  return new Promise((resolve, reject) => {
+    dashboardInstance.getCampaignAddress(address, (err, data) => {
+      if (err) {
+        reject(err)
+      } else {
+        resolve(data.toString())
+      }
+    });
+  });
 }
 
 const Campaign = (props) => {
@@ -105,7 +145,7 @@ const Campaign = (props) => {
           <Progress percent={props.raised / props.target * 100} />
         </Card.Meta>
         <Card.Description>{props.raised} wei/{props.target} wei</Card.Description>
-        <DonateModal address={props.address}/>
+        <DonateModal id={props.id}/>
       </Card.Content>
       <Card.Content extra>
         <a>
