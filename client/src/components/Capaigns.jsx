@@ -1,120 +1,211 @@
-import React from 'react'
-import { Card, Icon, Image, Progress } from 'semantic-ui-react'
-import DonateModal from './DonateModal'
+import React from "react";
+import { Card, Icon, Image, Progress } from "semantic-ui-react";
+import DonateModal from "./DonateModal";
+import { ABI, ADDRESS, ABI_CAMPAIGN } from "../constants/constants";
 
-const UNIX_TIME = 1535829759
+const UNIX_TIME = 1535829759;
 
 const style = {
   campaignDiv: {
-    display: 'grid',
-    gridTemplateColumns: '1fr 1fr 1fr',
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr 1fr"
   },
   campaignCard: {
-    margin: '1rem',
+    margin: "1rem"
   }
-}
+};
 
-class Campaigns extends React.Component{
+class Campaigns extends React.Component {
   constructor(props) {
-    super(props)
-    this.state = {campaigns: []}
+    super(props);
+    this.state = { campaigns: [] };
   }
-  componentWillMount() {
-    /*
-     * TODO: Fetch all campaigns and add them to the components state with `this.setState({<params>})`
-     * This function is called before the page loads
-     */
-    this.setState({campaigns: exampleCampaigns()})
-    //
-  }
-  render () {
-    if(this.state.campaigns.length === 0) {
-      return (
-        <h2> No campaigns found.</h2>
-      )
+  async componentWillMount() {
+    try {
+      let campaigns = await getCampaigns();
+      this.setState({ campaigns: campaigns ? campaigns : new Array() });
+    } catch (error) {
+      console.log(error);
     }
-    else {
+
+  }
+  render() {
+    if (this.state.campaigns.length === 0) {
+      return <h2> No campaigns found.</h2>;
+    } else {
       return (
-        <div style={style.campaignDiv} >
+        <div style={style.campaignDiv}>
           {this.state.campaigns.map((campaign, i) => {
-            return <span key={i}><Campaign {...campaign} /></span>
+            return (
+              <span key={i}>
+                <Campaign {...campaign} />
+              </span>
+            );
           })}
         </div>
-      )
+      );
     }
   }
-
 }
 
-// NOTE: This functions is marked as async, consider using await (promises) inside of it
-const getCampaign = async (address) => {
-  /*
-   * TODO: Fetch campaign info. See Campaign component below. Keep in mind it expects specific property names (props).
-   * Use the examples below as a template.
-   */
+const getCampaigns = async () => {
+  let count = await campaignCount();
+  console.log(`count: ${count}`)
+  let campaigns = [];
+  for (let i = 1; i <= count; i++) {
+    let c = await getCampaign(i);
+    campaigns.push(c);
+  }
+  return campaigns;
 }
 
-const exampleCampaigns = () => {
-  return [
-    {
-      name: 'Test',
-      target: 1000,
-      raised: 100,
-      ipfsImage: 'https://react.semantic-ui.com/images/avatar/large/matthew.png',
-      funderCount: 10,
-      expires: UNIX_TIME + 3600 * 4,
-      address: '0xced42495b72d48a3a78b92346d4f1b7d2e1f7c61a22fe01641daed83cd749493'
-    },
-    {
-      name: 'Test',
-      target: 1000,
-      raised: 100,
-      ipfsImage: 'https://react.semantic-ui.com/images/avatar/large/matthew.png',
-      funderCount: 10,
-      expires: UNIX_TIME + 3600 * 4,
-      address: '0xced42495b72d48a3a78b92346d4f1b7d2e1f7c61a22fe01641daed83cd749493'
-    },
-    {
-      name: 'Test',
-      target: 1000,
-      raised: 100,
-      ipfsImage: 'https://react.semantic-ui.com/images/avatar/large/matthew.png',
-      funderCount: 10,
-      expires: UNIX_TIME + 3600 * 4,
-      address: '0xced42495b72d48a3a78b92346d4f1b7d2e1f7c61a22fe01641daed83cd749493'
-    },
-    {
-      name: 'Test',
-      target: 1000,
-      raised: 100,
-      ipfsImage: 'https://react.semantic-ui.com/images/avatar/large/matthew.png',
-      funderCount: 10,
-      expires: UNIX_TIME + 3600 * 4,
-      address: '0xced42495b72d48a3a78b92346d4f1b7d2e1f7c61a22fe01641daed83cd749493'
-    }
-  ]
-}
+const getCampaign = async id => {
+  try {
+    let address = await getCampaignAddress(id);
+    let campaign = await Promise.all([ 
+        getCurrentFunding(id), 
+        getTotalFunders(id),
+        getCampaignName(address),
+        getCampaignGoal(address),
+        getCampaignDeadline(address)
+      ]);
 
-const Campaign = (props) => {
+    return {
+      cid: id,
+      name: campaign[2],
+      target: campaign[3],
+      raised: campaign[0],
+      ipfsImage: "https://react.semantic-ui.com/images/avatar/large/matthew.png",
+      funderCount: campaign[1],
+      expires: campaign[4],
+      address: address
+    };
+  } catch (error) {
+    console.log(error);
+  }
+};
+
+const Campaign = props => {
   return (
     <Card style={style.campaignCard}>
       <Image src={props.ipfsImage} />
       <Card.Content>
         <Card.Header>{props.name}</Card.Header>
         <Card.Meta>
-          <Progress percent={props.raised / props.target * 100} />
+          <Progress percent={(props.raised / props.target) * 100} />
         </Card.Meta>
-        <Card.Description>{props.raised} wei/{props.target} wei</Card.Description>
-        <DonateModal address={props.address}/>
+        <Card.Description>
+          {props.raised} wei/
+          {props.target} wei
+        </Card.Description>
+        <DonateModal address={props.address} cid={props.cid} />
       </Card.Content>
       <Card.Content extra>
         <a>
-          <Icon name='user' />
+          <Icon name="user" />
           {props.funderCount} Funders
         </a>
       </Card.Content>
     </Card>
-  )
+  );
+};
+
+const getCampaignDeadline = async (address) => {
+  const Campaign = window.web3.eth.contract(ABI_CAMPAIGN);
+  let campaignInstance = Campaign.at(address);
+  return new Promise((resolve, reject) => {
+    campaignInstance.deadline((err, data) => {
+      if (err) {
+        reject(err)
+      } else {
+        resolve(data.toString())
+      }
+    });
+  });
 }
 
-export default Campaigns
+const getCampaignGoal = async (address) => {
+  const Campaign = window.web3.eth.contract(ABI_CAMPAIGN);
+  let campaignInstance = Campaign.at(address);
+  return new Promise((resolve, reject) => {
+    campaignInstance.goal((err, data) => {
+      if (err) {
+        reject(err)
+      } else {
+        resolve(data.toString())
+      }
+    });
+  });
+}
+
+const getCampaignName = async (address) => {
+  const Campaign = window.web3.eth.contract(ABI_CAMPAIGN);
+  let campaignInstance = Campaign.at(address);
+  return new Promise((resolve, reject) => {
+    campaignInstance.name((err, data) => {
+      if (err) {
+        reject(err)
+      } else {
+        resolve(data.toString())
+      }
+    });
+  });
+}
+
+const getTotalFunders = async id => {
+  const Dashboard = window.web3.eth.contract(ABI);
+  let dashboardInstance = Dashboard.at(ADDRESS);
+  return new Promise((resolve, reject) => {
+    dashboardInstance.viewTotalFunders(id, (err, data) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(data.toString());
+      }
+    });
+  });
+};
+
+const getCurrentFunding = async id => {
+  const Dashboard = window.web3.eth.contract(ABI);
+  let dashboardInstance = Dashboard.at(ADDRESS);
+  return new Promise((resolve, reject) => {
+    dashboardInstance.viewCurrentFunding(id, (err, data) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(data.toString());
+      }
+    });
+  });
+};
+
+const getCampaignAddress = async id => {
+  const Dashboard = window.web3.eth.contract(ABI);
+  let dashboardInstance = Dashboard.at(ADDRESS);
+  return await new Promise((resolve, reject) => {
+    dashboardInstance.getCampaignAddress(id, (err, data) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(data.toString());
+      }
+    });
+  });
+};
+
+const campaignCount = async () => {
+  const Dashboard = window.web3.eth.contract(ABI);
+  let dashboardInstance = Dashboard.at(ADDRESS);
+  return new Promise((resolve, reject) => {
+    dashboardInstance.campaignCount((err, data) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(data.toString());
+      }
+    });
+  });
+};
+
+export default Campaigns;
